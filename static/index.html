@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CS2 Sniper</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Sora:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+
+  <header class="hero">
+    <div class="hero-brand">
+      <p class="brand-mark">CS2 SNIPER</p>
+      <p class="brand-line">Under-market hunts · under $10 · timed Discord alerts</p>
+    </div>
+    <div class="hero-status">
+      <div class="status-block" id="scannerStatus">
+        <span class="status-dot"></span>
+        <span class="status-text">Offline</span>
+      </div>
+      <button type="button" class="ghost-btn" id="toggleSettings">Controls</button>
+      <button type="button" class="ghost-btn" id="scanNow">Scan</button>
+    </div>
+  </header>
+
+  <div class="meter" id="statsMeter"></div>
+
+  <aside class="controls" id="controlsPanel" hidden>
+    <form id="settingsForm" class="controls-form">
+      <div class="controls-grid">
+        <label>CSFloat API key<input type="password" id="csfloatKey" autocomplete="off" placeholder="Already saved in .env if set" /></label>
+        <label>Discord webhook<input type="password" id="discordWebhook" autocomplete="off" placeholder="Already saved in .env if set" /></label>
+        <label>Min profit ($)<input type="number" id="minProfit" step="0.5" min="0" /></label>
+        <label>Min discount (%)<input type="number" id="minDiscount" step="1" min="0" max="90" /></label>
+        <label>Max buy ($)<input type="number" id="maxBuy" step="0.5" min="0.1" /></label>
+        <label>Poll (sec)<input type="number" id="pollInterval" step="1" min="5" /></label>
+      </div>
+      <button type="submit" class="solid-btn">Save settings</button>
+    </form>
+    <p class="controls-note">Discord fires by time + profit: big fish ≤24h · ~$4 ≤15m · small ≤5m · buy-now immediate.</p>
+  </aside>
+
+  <main class="stage">
+    <section class="feed">
+      <div class="section-bar">
+        <h2>Live feed</h2>
+        <div class="tabs" id="filters">
+          <button class="tab active" data-filter="all">All</button>
+          <button class="tab" data-filter="actionable">Act now</button>
+          <button class="tab" data-filter="watching">Watching</button>
+          <button class="tab" data-filter="big">Big fish</button>
+          <button class="tab" data-filter="case">Cases</button>
+          <button class="tab" data-filter="key">Keys</button>
+          <button class="tab" data-filter="sticker">Stickers</button>
+          <button class="tab" data-filter="skin">Skins</button>
+        </div>
+      </div>
+      <div id="dealsList" class="feed-list"></div>
+    </section>
+
+    <section class="liquid">
+      <div class="section-bar">
+        <h2>Liquid under $10</h2>
+      </div>
+      <p class="section-copy">Prices cross-checked vs Skinport, Steam, CSGOMarket, SkinCash + openskin.</p>
+      <div id="hotList" class="liquid-list"></div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
