@@ -1,25 +1,57 @@
-# Secrets / local
+# ============================================================
+# SECRETS — never commit these. Real keys live only in .env
+# ============================================================
 .env
+.env.*
+!.env.example
 .env.local
+.env.development
+.env.production
+.env.backup
 *.pem
 *.key
+*.p12
+*.pfx
+secrets/
+credentials/
+**/secrets.json
+**/credentials.json
 
+# ============================================================
 # Python
+# ============================================================
 .venv/
 venv/
+env/
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
 
+# ============================================================
 # OS / IDE
+# ============================================================
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
+*.swp
+*~
 
-# Logs / temp
+# ============================================================
+# Logs / temp / caches
+# ============================================================
 *.log
 tmp/
 temp/
+data/
+tools/.skinport_cache.json
+tools/*.cache.json
+*.cache

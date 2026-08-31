@@ -7,14 +7,22 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable
 
+from .buy_links import csfloat_search_url, market_buy_url, market_sell_url, sell_deposit_url
 from .config import settings
 from .csfloat_client import CSFloatClient, RateLimitError, csfloat_client
 from .discord_alerts import send_discord_alert
 from .models import HotItem, SnipeDeal
 from .openskin import DEFAULT_WATCHLIST, OpenSkinClient, openskin_client
 from .price_sources import PriceAggregator, price_aggregator
-from .pricing import build_deal_from_listing
-from .urgency import format_time_left, seconds_until, urgency_reason, urgency_tier
+from .pricing import build_arb_deal_from_quote, build_deal_from_listing
+from .urgency import (
+    big_fish_profit_usd,
+    format_time_left,
+    medium_profit_usd,
+    seconds_until,
+    urgency_reason,
+    urgency_tier,
+)
 
 
 @dataclass
@@ -28,6 +36,9 @@ class ScannerState:
     watching_count: int = 0
     api_key_configured: bool = False
     cooldown_until: str | None = None
+    # Why candidates were rejected on the last scan — proves the bot is working
+    # even when the dashboard is empty.
+    reject_reasons: dict[str, int] = field(default_factory=dict)
     light_mode: bool = False
     hot_items: list[HotItem] = field(default_factory=list)
     deals: deque[SnipeDeal] = field(default_factory=lambda: deque(maxlen=200))
@@ -79,7 +90,7 @@ class SniperScanner:
             if light:
                 wait = int(self._cooldown_until - now)
                 self.state.last_error = (
-                    f"CSFloat light mode ({wait}s) — still scanning public feed + other markets"
+                    f"CSFloat light mode ({wait}s) — still scanning multi-market prices"
                 )
             else:
                 self.state.cooldown_until = None
@@ -89,7 +100,8 @@ class SniperScanner:
             try:
                 await self.scan_once(light=light)
                 if not light:
-                    self.state.last_error = None
+                    if self.state.last_error and "Discord" not in (self.state.last_error or ""):
+                        self.state.last_error = None
                     self._backoff_sec = settings.rate_limit_cooldown_sec
                 sleep_for = 90 if light else settings.poll_interval_sec
             except RateLimitError as exc:
@@ -100,7 +112,6 @@ class SniperScanner:
                 self.state.light_mode = True
                 self.state.last_error = f"{exc} Staying online in light mode."
                 self._backoff_sec = min(self._backoff_sec * 2, 900)
-                # Immediately do a light scan so user isn't staring at a dead bot
                 try:
                     await self.scan_once(light=True)
                 except Exception:
@@ -113,7 +124,6 @@ class SniperScanner:
             await asyncio.sleep(sleep_for)
 
     def _upsert_deal(self, deal: SnipeDeal) -> None:
-        # refresh existing by id
         existing = [d for d in self.state.deals if d.listing_id != deal.listing_id]
         existing.insert(0, deal)
         self.state.deals = deque(existing[:200], maxlen=200)
@@ -134,20 +144,46 @@ class SniperScanner:
             if sent:
                 self.state.alerted_listing_ids.add(deal.listing_id)
                 self.state.alerts_sent += 1
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001
+            self.state.last_error = f"Discord alert failed: {exc}"
 
     async def scan_once(self, light: bool = False) -> list[SnipeDeal]:
         self.state.api_key_configured = bool(settings.csfloat_api_key.strip())
         actionable_new: list[SnipeDeal] = []
 
-        # Bulk free price APIs (Skinport / CSGOMarket / SkinCash) — cached 10 min
+        # Bulk free price APIs — main scan engine (no CSFloat quota)
         try:
             await self.prices.refresh()
         except Exception:
             pass
 
-        # Refresh openskin hot list only every 5 scans (heavy call)
+        # Cross-market hits from price book (works during CSFloat cooldown)
+        arb_checked = 0
+        venue = settings.sell_venue.lower()
+        buyable = settings.buyable_market_set
+        rejects: dict[str, int] = {}
+        for quote in list(self.prices.book.values()):
+            # Need something to value the exit: a live venue ask, or the
+            # Steam-style market value anchor.
+            if not quote.sources.get(venue) and not quote.market_value_usd:
+                continue
+            # Need at least one cash-buyable market other than the sell venue.
+            if not any(
+                src in buyable and src != venue and price and price <= settings.max_buy_usd
+                for src, price in quote.sources.items()
+            ):
+                continue
+            arb_checked += 1
+            deal = build_arb_deal_from_quote(quote, rejects)
+            if not deal:
+                continue
+            self._upsert_deal(deal)
+            if deal.urgency == "actionable":
+                was_alerted = deal.listing_id in self.state.alerted_listing_ids
+                await self._maybe_alert(deal)
+                if not was_alerted and deal.listing_id in self.state.alerted_listing_ids:
+                    actionable_new.append(deal)
+
         if self.state.scans_completed % 5 == 0 or not self.state.hot_items:
             try:
                 self.state.hot_items = await self.openskin.refresh_hot_items()
@@ -160,39 +196,46 @@ class SniperScanner:
         )
 
         listings: list[dict] = []
-        if light or not self.state.api_key_configured:
-            # Light / no-key: public feed only (no max_price filter → still useful for watching)
+        # CSFloat: at most ONE listing request per scan
+        if not light and self.state.api_key_configured:
+            feeds = (
+                self.csfloat.iter_recent_under_budget,
+                self.csfloat.iter_discount_under_budget,
+                self.csfloat.iter_auctions_ending_soon,
+            )
+            feed_fn = feeds[self._feed_index % len(feeds)]
+            self._feed_index += 1
+            try:
+                async for listing in feed_fn(settings.max_buy_cents, pages=1):
+                    listings.append(listing)
+            except RateLimitError:
+                raise
+            except Exception:
+                pass
+        else:
             try:
                 public_listings, _ = await self.csfloat.get_listings(limit=40, public_feed=True)
                 listings.extend(public_listings)
             except RateLimitError:
-                # Even public is blocked — keep processing cached watches + price book
                 pass
             except Exception:
                 pass
-        else:
-            # Full mode: rotate ONE heavy feed per scan to cut request count ~3x
-            feeds = (
-                ("most_recent", self.csfloat.iter_recent_under_budget),
-                ("discount", self.csfloat.iter_discount_under_budget),
-                ("auctions", self.csfloat.iter_auctions_ending_soon),
-            )
-            _, feed_fn = feeds[self._feed_index % len(feeds)]
-            self._feed_index += 1
-            async for listing in feed_fn(settings.max_buy_cents, pages=1):
-                listings.append(listing)
 
-            # Watchlist only every other scan, and only 3 names
-            if self.state.scans_completed % 2 == 0:
-                for name in watch_names[:3]:
-                    try:
-                        item_listings = await self.csfloat.listings_for_item(name, limit=5)
-                        listings.extend(item_listings)
-                        await asyncio.sleep(2.0)
-                    except RateLimitError:
-                        raise
-                    except Exception:
-                        continue
+        # Extra CSFloat watchlist call rarely (1 name / every 3rd full scan)
+        if (
+            not light
+            and self.state.api_key_configured
+            and self.state.scans_completed % 3 == 0
+            and watch_names
+        ):
+            name = watch_names[self.state.scans_completed % len(watch_names)]
+            try:
+                item_listings = await self.csfloat.listings_for_item(name, limit=5)
+                listings.extend(item_listings)
+            except RateLimitError:
+                raise
+            except Exception:
+                pass
 
         unique: dict[str, dict] = {}
         for listing in listings:
@@ -201,14 +244,11 @@ class SniperScanner:
                 unique[listing_id] = listing
                 self.state.watched_raw[listing_id] = listing
 
-        # Trim watched raw cache so memory doesn't grow forever
         if len(self.state.watched_raw) > settings.max_watched_raw:
-            # keep newest-ish by iterating insertion order (py3.7+ dicts)
             overflow = len(self.state.watched_raw) - settings.max_watched_raw
             for old_id in list(self.state.watched_raw.keys())[:overflow]:
                 self.state.watched_raw.pop(old_id, None)
 
-        # also re-evaluate previously watched auctions not in this fetch
         for listing_id, listing in list(self.state.watched_raw.items()):
             unique.setdefault(listing_id, listing)
 
@@ -226,7 +266,10 @@ class SniperScanner:
             except Exception:
                 price_map = {}
 
-        self.state.listings_checked += len(unique)
+        self.state.reject_reasons = dict(
+            sorted(rejects.items(), key=lambda kv: -kv[1])[:6]
+        )
+        self.state.listings_checked += len(unique) + arb_checked
         watching = 0
 
         for listing in unique.values():
@@ -237,12 +280,10 @@ class SniperScanner:
                 self.prices.get(name),
             )
             if not deal:
-                # drop dead watches
                 lid = str(listing.get("id"))
                 self.state.watched_raw.pop(lid, None)
                 continue
 
-            # refresh time labels on every scan
             if deal.expires_at:
                 try:
                     exp = datetime.fromisoformat(deal.expires_at)
@@ -285,7 +326,6 @@ class SniperScanner:
         return actionable_new
 
     def get_deals(self, limit: int = 100) -> list[dict]:
-        # actionable first, then watching; score within groups
         deals = list(self.state.deals)
 
         def sort_key(d: SnipeDeal) -> tuple:
@@ -313,6 +353,16 @@ class SniperScanner:
                 else "fast"
                 if h.liquidity_score > 60
                 else "medium",
+                "buy_url": csfloat_search_url(h.name),
+                "buy_links": {
+                    "csfloat": csfloat_search_url(h.name),
+                    "skinport": market_buy_url("skinport", h.name),
+                    "steam": market_buy_url("steam", h.name),
+                },
+                "sell_venue": settings.sell_venue,
+                "sell_url": market_sell_url(h.name),
+                "sell_deposit_url": sell_deposit_url(),
+                "sell_target_usd": h.ask_usd,
             }
             for h in self.state.hot_items
         ]
@@ -324,6 +374,7 @@ class SniperScanner:
             "last_error": self.state.last_error,
             "scans_completed": self.state.scans_completed,
             "listings_checked": self.state.listings_checked,
+            "reject_reasons": self.state.reject_reasons,
             "alerts_sent": self.state.alerts_sent,
             "watching_count": self.state.watching_count,
             "api_key_configured": self.state.api_key_configured,
@@ -336,12 +387,13 @@ class SniperScanner:
                 "min_discount_pct": settings.min_discount_pct,
                 "max_buy_usd": settings.max_buy_usd,
                 "poll_interval_sec": settings.poll_interval_sec,
+                "sell_venue": settings.sell_venue,
             },
             "urgency_rules": {
-                "big_fish": "≥$6 profit → Discord at ≤24h left",
-                "medium": "≥$4 profit → Discord at ≤15m left",
-                "small": "≥$2 profit → Discord at ≤5m left",
-                "buy_now": "alert immediately",
+                "big_fish": f"≥${big_fish_profit_usd():.2f} profit → Discord at ≤24h left",
+                "medium": f"≥${medium_profit_usd():.2f} profit → Discord at ≤15m left",
+                "small": f"≥${settings.min_profit_usd:.2f} profit → Discord at ≤5m left",
+                "buy_now": "alert immediately with buy link",
             },
         }
 

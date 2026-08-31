@@ -21,7 +21,7 @@ class CSFloatClient:
     def __init__(self, api_key: str | None = None) -> None:
         self.api_key = api_key or settings.csfloat_api_key
         self._last_request_at = 0.0
-        self._min_gap_sec = 2.0  # stay under CSFloat IP + account limits
+        self._min_gap_sec = 4.0  # stay under CSFloat IP + account limits
 
     def _headers(self) -> dict[str, str]:
         headers = {"Accept": "application/json"}

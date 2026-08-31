@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Sora:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/style.css?v=9" />
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -29,6 +29,14 @@
 
   <div class="meter" id="statsMeter"></div>
 
+  <div class="flip-banner" id="flipBanner">
+    <div class="flip-banner-inner">
+      <span class="flip-step buy-step"><strong>BUY</strong> on cheapest site</span>
+      <span class="flip-arrow" aria-hidden="true">→</span>
+      <span class="flip-step sell-step"><strong>SELL</strong> on <span id="flipSellVenue">CSFloat</span> <span class="flip-note">(crypto · list from your profile)</span></span>
+    </div>
+  </div>
+
   <aside class="controls" id="controlsPanel" hidden>
     <form id="settingsForm" class="controls-form">
       <div class="controls-grid">
@@ -36,12 +44,13 @@
         <label>Discord webhook<input type="password" id="discordWebhook" autocomplete="off" placeholder="Already saved in .env if set" /></label>
         <label>Min profit ($)<input type="number" id="minProfit" step="0.5" min="0" /></label>
         <label>Min discount (%)<input type="number" id="minDiscount" step="1" min="0" max="90" /></label>
-        <label>Max buy ($)<input type="number" id="maxBuy" step="0.5" min="0.1" /></label>
+        <label>My budget ($)<input type="number" id="maxBuy" step="0.5" min="0.1" title="Most you can spend on one item. Raise this as your balance grows." /></label>
         <label>Poll (sec)<input type="number" id="pollInterval" step="1" min="5" /></label>
       </div>
       <button type="submit" class="solid-btn">Save settings</button>
     </form>
     <p class="controls-note">Discord fires by time + profit: big fish ≤24h · ~$4 ≤15m · small ≤5m · buy-now immediate.</p>
+    <button type="button" class="ghost-btn" id="restoreDismissed">Restore hidden deals</button>
   </aside>
 
   <main class="stage">
@@ -66,11 +75,33 @@
       <div class="section-bar">
         <h2>Liquid under $10</h2>
       </div>
-      <p class="section-copy">Prices cross-checked vs Skinport, Steam, CSGOMarket, SkinCash + openskin.</p>
+      <p class="section-copy">Buy cheap anywhere → sell on <strong>CSFloat</strong> (crypto). Skinport prices kept for reference only.</p>
       <div id="hotList" class="liquid-list"></div>
     </section>
   </main>
 
-  <script src="/static/app.js"></script>
+  <section class="pulse" id="marketPulse">
+    <div class="section-bar">
+      <h2>Market pulse</h2>
+      <p class="section-copy pulse-lead">Steam news · trader talk · flip rules for a small budget</p>
+    </div>
+    <div class="pulse-links" id="pulseLinks"></div>
+    <div class="pulse-grid">
+      <div class="pulse-col">
+        <h3>What to remember</h3>
+        <div id="pulseTips" class="pulse-list"></div>
+      </div>
+      <div class="pulse-col">
+        <h3>Steam news</h3>
+        <div id="pulseNews" class="pulse-list"></div>
+      </div>
+      <div class="pulse-col">
+        <h3>Trader talk</h3>
+        <div id="pulseTalk" class="pulse-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <script src="/static/app.js?v=9"></script>
 </body>
 </html>

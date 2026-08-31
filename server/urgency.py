@@ -8,11 +8,21 @@ from .config import settings
 
 # Profit tiers → when Discord should fire for auctions
 # Buy-now listings always alert immediately (they're actionable now).
-BIG_FISH_PROFIT_USD = 6.0          # "big fish" — warn with ~24h left
-MEDIUM_PROFIT_USD = 4.0            # solid flip — warn near the end
+# Tiers scale with your minimum profit so they stay meaningful when you change
+# it: a $6 "big fish" is meaningless once the floor drops to $1.
+BIG_FISH_MULTIPLE = 4.0
+MEDIUM_MULTIPLE = 2.0
 BIG_FISH_WINDOW_SEC = 24 * 3600    # 24 hours
 MEDIUM_WINDOW_SEC = 15 * 60        # 15 minutes
 SMALL_WINDOW_SEC = 5 * 60          # 5 minutes
+
+
+def big_fish_profit_usd() -> float:
+    return max(settings.min_profit_usd * BIG_FISH_MULTIPLE, settings.min_profit_usd)
+
+
+def medium_profit_usd() -> float:
+    return max(settings.min_profit_usd * MEDIUM_MULTIPLE, settings.min_profit_usd)
 
 
 def parse_expires_at(listing: dict[str, Any]) -> datetime | None:
@@ -57,9 +67,9 @@ def format_time_left(seconds: float | None) -> str:
 
 def alert_window_seconds(net_profit_usd: float, is_big_hit: bool) -> int:
     """How close to auction end before we Discord-alert."""
-    if is_big_hit or net_profit_usd >= BIG_FISH_PROFIT_USD:
+    if is_big_hit or net_profit_usd >= big_fish_profit_usd():
         return BIG_FISH_WINDOW_SEC
-    if net_profit_usd >= MEDIUM_PROFIT_USD:
+    if net_profit_usd >= medium_profit_usd():
         return MEDIUM_WINDOW_SEC
     return SMALL_WINDOW_SEC
 
@@ -100,9 +110,9 @@ def urgency_reason(net_profit_usd: float, is_big_hit: bool, seconds_left: float 
         return "Buy now — grab it"
 
     window = alert_window_seconds(net_profit_usd, is_big_hit)
-    if is_big_hit or net_profit_usd >= BIG_FISH_PROFIT_USD:
+    if is_big_hit or net_profit_usd >= big_fish_profit_usd():
         label = "big fish"
-    elif net_profit_usd >= MEDIUM_PROFIT_USD:
+    elif net_profit_usd >= medium_profit_usd():
         label = "medium"
     else:
         label = "small"

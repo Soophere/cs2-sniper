@@ -2,6 +2,16 @@
 
 Local dashboard + Discord alerts for under-market CSFloat deals.
 
+## Secrets (important)
+
+Your real API key and Discord webhook live only in **`.env`**.
+That file is **gitignored** and must never be uploaded to GitHub.
+
+- Safe to commit: `.env.example` (placeholders only)
+- Never commit: `.env`, anything with real keys/webhooks
+
+If a key ever leaks, rotate it on CSFloat / Discord immediately.
+
 ## Quick start
 
 1. Install Python 3.11+
@@ -12,8 +22,8 @@ cd C:\Users\Sulaiman\Desktop\cs2-sniper
 copy .env.example .env
 ```
 
-3. Edit `.env`:
-- `CSFLOAT_API_KEY` — **required** for scanning items under $10 (csfloat.com → Profile → Developer)
+3. Edit `.env` (local only):
+- `CSFLOAT_API_KEY` — **required** (csfloat.com → Profile → Developer)
 - `DISCORD_WEBHOOK_URL` — your Discord channel webhook
 
 4. Install and run:
@@ -29,12 +39,11 @@ python -m server.main
 ## What it does
 
 - Polls **CSFloat** for new / discounted listings under your max price ($10 default)
-- Cross-checks prices + liquidity via **openskin.dev** (free API)
-- Filters: min **$2 profit**, min **10% under market**
-- Hunts **cases, keys, stickers, skins**
-- Shows **fastest sellers** panel (high volume = sells quicker)
-- **Big hits** pinned to top (2x min profit or 25%+ discount)
-- **Buy now** button opens the CSFloat listing directly
+- Cross-checks prices + liquidity via free public market dumps + OpenSkin
+- Filters: min **$1 profit** (adjustable), min **10% under market**, 3+ markets must agree
+- Hunts **cases, keys, stickers, skins** — cases preferred for small budgets
+- Shows **liquid items** and a **market pulse** panel (Steam news + trader talk + flip tips)
+- **Buy / Sell** buttons with clear price difference
 - Sends **Discord embed alerts** when a deal is found
 
 ## APIs used

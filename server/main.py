@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from .config import settings
 from .csfloat_client import csfloat_client
+from .market_pulse import get_market_pulse
 from .scanner import scanner
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -80,7 +81,10 @@ if STATIC_DIR.exists():
 
 @app.get("/")
 async def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(
+        STATIC_DIR / "index.html",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
 
 
 @app.get("/favicon.ico")
@@ -103,6 +107,12 @@ async def deals(limit: int = 100) -> dict[str, Any]:
 @app.get("/api/hot-items")
 async def hot_items() -> dict[str, Any]:
     return {"items": scanner.get_hot_items()}
+
+
+@app.get("/api/market-pulse")
+async def market_pulse() -> dict[str, Any]:
+    """Steam news + trader talk + flip tips. No secrets required."""
+    return await get_market_pulse()
 
 
 @app.post("/api/scan")
@@ -132,6 +142,7 @@ async def get_settings() -> dict[str, Any]:
         "min_discount_pct": settings.min_discount_pct,
         "max_buy_usd": settings.max_buy_usd,
         "poll_interval_sec": settings.poll_interval_sec,
+        "sell_venue": settings.sell_venue,
     }
 
 
@@ -143,14 +154,27 @@ async def update_settings(body: SettingsUpdate) -> dict[str, Any]:
 
     _persist_env(updates)
 
+    old_budget = settings.max_buy_usd
     for key, value in updates.items():
         setattr(settings, key, value)
 
     if "csfloat_api_key" in updates:
         csfloat_client.api_key = settings.csfloat_api_key
 
+    # The price feeds only keep items priced near the old budget, so a raised
+    # budget would look like it did nothing until the next cache expiry.
+    repriced = False
+    if settings.max_buy_usd > old_budget:
+        await scanner.prices.refresh(force=True)
+        repriced = True
+
     scanner.state.api_key_configured = bool(settings.csfloat_api_key.strip())
-    return {"ok": True, "updated": list(updates.keys())}
+    return {
+        "ok": True,
+        "updated": list(updates.keys()),
+        "reprice": repriced,
+        "item_count": len(scanner.prices.book),
+    }
 
 
 @app.get("/api/events")
