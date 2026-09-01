@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Sora:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css?v=9" />
+  <link rel="stylesheet" href="/static/style.css?v=10" />
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -36,6 +36,25 @@
       <span class="flip-step sell-step"><strong>SELL</strong> on <span id="flipSellVenue">CSFloat</span> <span class="flip-note">(crypto · list from your profile)</span></span>
     </div>
   </div>
+
+  <section class="search-panel" id="searchPanel">
+    <form class="search-form" id="searchForm" autocomplete="off">
+      <label class="search-label" for="skinSearch">Search skins</label>
+      <div class="search-row">
+        <input
+          type="search"
+          id="skinSearch"
+          name="q"
+          placeholder="AK Redline, Kilowatt Case, Sticker | rain…"
+          minlength="2"
+          required
+        />
+        <button type="submit" class="solid-btn" id="searchBtn">Search</button>
+      </div>
+      <p class="search-hint" id="searchHint">Prices from Skinport, Waxpeer, Steam &amp; more — links open the right market.</p>
+    </form>
+    <div id="searchResults" class="search-results" hidden></div>
+  </section>
 
   <aside class="controls" id="controlsPanel" hidden>
     <form id="settingsForm" class="controls-form">
@@ -102,6 +121,6 @@
     </div>
   </section>
 
-  <script src="/static/app.js?v=9"></script>
+  <script src="/static/app.js?v=10"></script>
 </body>
 </html>

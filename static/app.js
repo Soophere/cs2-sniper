@@ -42,6 +42,11 @@ const els = {
   toggleSettings: document.getElementById("toggleSettings"),
   controlsPanel: document.getElementById("controlsPanel"),
   restoreDismissed: document.getElementById("restoreDismissed"),
+  searchForm: document.getElementById("searchForm"),
+  skinSearch: document.getElementById("skinSearch"),
+  searchBtn: document.getElementById("searchBtn"),
+  searchResults: document.getElementById("searchResults"),
+  searchHint: document.getElementById("searchHint"),
 };
 
 function capVenue(v) {
@@ -379,6 +384,114 @@ function connectEvents() {
 loadSettings().catch(() => {});
 loadMarketPulse().catch(() => {});
 connectEvents();
+wireSearch();
+
+function wireSearch() {
+  if (!els.searchForm || !els.skinSearch) return;
+
+  let timer = null;
+  els.skinSearch.addEventListener("input", () => {
+    clearTimeout(timer);
+    const q = els.skinSearch.value.trim();
+    if (q.length < 2) {
+      if (els.searchResults) {
+        els.searchResults.hidden = true;
+        els.searchResults.innerHTML = "";
+      }
+      return;
+    }
+    timer = setTimeout(() => runSkinSearch(q), 280);
+  });
+
+  els.searchForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    clearTimeout(timer);
+    runSkinSearch(els.skinSearch.value.trim());
+  });
+}
+
+async function runSkinSearch(query) {
+  if (!els.searchResults) return;
+  if (!query || query.length < 2) {
+    els.searchResults.hidden = false;
+    els.searchResults.innerHTML = `<div class="search-empty">Type at least 2 characters.</div>`;
+    return;
+  }
+
+  if (els.searchBtn) {
+    els.searchBtn.disabled = true;
+    els.searchBtn.textContent = "…";
+  }
+  if (els.searchHint) {
+    els.searchHint.textContent = `Searching “${query}”…`;
+  }
+
+  try {
+    const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&limit=25`);
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || "Search failed");
+    }
+    renderSearchResults(data);
+  } catch (err) {
+    els.searchResults.hidden = false;
+    els.searchResults.innerHTML = `<div class="search-empty">${escapeHtml(err.message || "Search failed")}</div>`;
+  } finally {
+    if (els.searchBtn) {
+      els.searchBtn.disabled = false;
+      els.searchBtn.textContent = "Search";
+    }
+  }
+}
+
+function renderSearchResults(data) {
+  const results = data.results || [];
+  els.searchResults.hidden = false;
+
+  if (els.searchHint) {
+    els.searchHint.textContent = results.length
+      ? `${results.length} matches · ${Number(data.item_count || 0).toLocaleString()} items in price book`
+      : `No matches in ${Number(data.item_count || 0).toLocaleString()} priced items — try a shorter name`;
+  }
+
+  if (!results.length) {
+    els.searchResults.innerHTML = `<div class="search-empty">Nothing found. Try “AK-47”, “Case”, or a sticker name.</div>`;
+    return;
+  }
+
+  els.searchResults.innerHTML = results
+    .map((item) => {
+      const prices = item.prices || {};
+      const priceBits = Object.entries(prices)
+        .sort((a, b) => a[1] - b[1])
+        .slice(0, 6)
+        .map(([src, price]) => `${escapeHtml(src)} ${money(price)}`)
+        .join(" · ");
+      const cheapest = item.cheapest || null;
+      const buyUrl = (cheapest && cheapest.url) || (item.buy_links && item.buy_links.skinport) || "#";
+      const buyLabel = cheapest
+        ? `Buy ${money(cheapest.price_usd)} · ${capVenue(cheapest.source)}`
+        : "Buy";
+      const sellVenue = capVenue(item.sell_venue || "csfloat");
+      const sellAsk = item.sell_ask_usd != null ? ` ~${money(item.sell_ask_usd)}` : "";
+      const mv =
+        item.market_value_usd != null ? ` · value ~${money(item.market_value_usd)}` : "";
+
+      return `<article class="search-card">
+        <div>
+          <p class="search-card-name">${escapeHtml(item.name)}</p>
+          <p class="search-card-meta">${escapeHtml(item.category || "")}${mv}</p>
+          <p class="search-card-prices">${priceBits || "No live asks"}</p>
+        </div>
+        <div class="search-card-actions">
+          <a class="buy" href="${escapeHtml(buyUrl)}" target="_blank" rel="noopener">${escapeHtml(buyLabel)}</a>
+          <a class="sell" href="${escapeHtml(item.sell_deposit_url || item.sell_url || "#")}" target="_blank" rel="noopener">Sell ${escapeHtml(sellVenue)}${sellAsk}</a>
+          <a href="${escapeHtml(item.sell_url || "#")}" target="_blank" rel="noopener">Check price</a>
+        </div>
+      </article>`;
+    })
+    .join("");
+}
 
 async function loadMarketPulse() {
   const tipsEl = document.getElementById("pulseTips");

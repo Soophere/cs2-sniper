@@ -694,6 +694,114 @@ html, body {
   border-top: 1px solid var(--line);
   animation: rise 0.8s 0.15s ease both;
 }
+
+.search-panel {
+  margin: 0.35rem 1.75rem 1rem;
+  animation: rise 0.55s 0.05s ease both;
+}
+.search-label {
+  display: block;
+  font-family: var(--display);
+  font-size: 1.35rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 0.4rem;
+}
+.search-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+.search-row input[type="search"] {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.72);
+  padding: 0.75rem 0.9rem;
+  font-family: var(--sans);
+  font-size: 1rem;
+  color: var(--ink);
+}
+.search-row input[type="search"]:focus {
+  outline: 2px solid var(--signal);
+  outline-offset: 1px;
+  border-color: var(--signal);
+}
+.search-hint {
+  margin: 0.45rem 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.search-results {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.search-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.65rem 1rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.5);
+}
+.search-card-name {
+  margin: 0;
+  font-weight: 650;
+  font-size: 0.98rem;
+  line-height: 1.25;
+}
+.search-card-meta {
+  margin: 0.2rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.search-card-prices {
+  margin: 0.4rem 0 0;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--ink-soft);
+  line-height: 1.45;
+  word-break: break-word;
+}
+.search-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: stretch;
+  min-width: 9.5rem;
+}
+.search-card-actions a {
+  text-align: center;
+  text-decoration: none;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: #fff;
+}
+.search-card-actions a.buy {
+  background: var(--signal);
+  border-color: var(--signal);
+  color: #fff;
+}
+.search-card-actions a.sell {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.search-empty {
+  padding: 1rem;
+  text-align: center;
+  color: var(--muted);
+  border: 1px dashed var(--line);
+}
 .pulse .section-bar {
   display: flex;
   flex-wrap: wrap;
@@ -800,11 +908,13 @@ a.pulse-title:hover { color: var(--signal); }
 }
 
 @media (max-width: 560px) {
-  .hero, .stage, .meter, .controls, .pulse { margin-left: 1rem; margin-right: 1rem; padding-left: 0; padding-right: 0; }
+  .hero, .stage, .meter, .controls, .pulse, .search-panel { margin-left: 1rem; margin-right: 1rem; padding-left: 0; padding-right: 0; }
   .hero, .stage { padding-left: 1rem; padding-right: 1rem; }
   .controls-grid { grid-template-columns: 1fr; }
   .deal { grid-template-columns: 48px 1fr; }
   .deal-side { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: center; flex-wrap: wrap; }
   .trade-flow { flex-direction: column; }
   .trade-arrow { transform: rotate(90deg); align-self: flex-start; margin-left: 1rem; }
+  .search-card { grid-template-columns: 1fr; }
+  .search-card-actions { flex-direction: row; flex-wrap: wrap; min-width: 0; }
 }

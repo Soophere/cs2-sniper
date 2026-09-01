@@ -16,6 +16,7 @@ from .config import settings
 from .csfloat_client import csfloat_client
 from .market_pulse import get_market_pulse
 from .scanner import scanner
+from .search import ensure_book_ready, search_price_book
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC_DIR = ROOT / "static"
@@ -113,6 +114,23 @@ async def hot_items() -> dict[str, Any]:
 async def market_pulse() -> dict[str, Any]:
     """Steam news + trader talk + flip tips. No secrets required."""
     return await get_market_pulse()
+
+
+@app.get("/api/search")
+async def search_items(q: str = "", limit: int = 25) -> dict[str, Any]:
+    """Search skins/cases across the local multi-market price book."""
+    query = (q or "").strip()
+    if len(query) < 2:
+        raise HTTPException(status_code=400, detail="Type at least 2 characters")
+
+    await ensure_book_ready(scanner.prices)
+    results = search_price_book(scanner.prices.book, query, limit=limit)
+    return {
+        "query": query,
+        "count": len(results),
+        "item_count": len(scanner.prices.book),
+        "results": results,
+    }
 
 
 @app.post("/api/scan")
